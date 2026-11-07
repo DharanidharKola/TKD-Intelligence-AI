@@ -17,7 +17,13 @@ import streamlit as st
 
 # ============================================================
 
-API_URL = os.getenv("TAEKWONDO_API_URL", "http://127.0.0.1:8000/chat")
+try:
+    API_URL = st.secrets["TAEKWONDO_API_URL"]
+except Exception:
+    API_URL = os.getenv(
+        "TAEKWONDO_API_URL",
+        "http://127.0.0.1:8000/chat"
+    )
 
 REQUEST_TIMEOUT = 120
 
