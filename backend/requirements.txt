@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+langgraph
+langchain
+langchain-groq
+langchain-pinecone
+pinecone
+langchain-huggingface
+sentence-transformers
+pypdf
+python-multipart
+langchain-text-splitters
+numpy==1.26.4
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
