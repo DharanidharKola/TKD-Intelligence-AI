@@ -1,61 +1,105 @@
+
 from backend.llm import get_llm
 from backend.rag.retriever import retrieve_rules
 from backend.rag.terminology_retriever import format_terminology_context
 
 
 def format_chat_history(chat_history):
+    """Keep only a small amount of recent conversation context."""
+
     if not chat_history:
         return "No previous conversation."
+
     lines = []
-    for item in chat_history[-6:]:
+
+    for item in chat_history[-2:]:
         role = item.get("role", "")
         content = str(item.get("content", "")).strip()
-        if role in ("user", "assistant") and content:
-            label = "User" if role == "user" else "Assistant"
-            lines.append(f"{label}: {content[:1000]}")
-    return "\\n".join(lines) if lines else "No previous conversation."
+
+        if role not in ("user", "assistant") or not content:
+            continue
+
+        label = "User" if role == "user" else "Assistant"
+
+        # Use the ending of long responses, which is often more useful
+        # for resolving a follow-up question.
+        content = content[-350:]
+
+        lines.append(f"{label}: {content}")
+
+    return "\n".join(lines) if lines else "No previous conversation."
 
 
-def answer_rules_question(question: str, chat_history=None, user_level="Beginner"):
+def answer_rules_question(
+    question: str,
+    chat_history=None,
+    user_level="Beginner",
+):
     chat_history = chat_history or []
+
     history = format_chat_history(chat_history)
 
-    # Recent context helps resolve short follow-up questions during retrieval.
-    retrieval_query = f"Recent conversation:\\n{history}\\nCurrent question: {question}"[-1800:]
-    rules = retrieve_rules(retrieval_query, k=3)
-    terminology_context = format_terminology_context(question, k=2)
+    # Include the current question and concise recent context
+    # so follow-up questions can be resolved.
+    retrieval_query = f"{history}\nCurrent question: {question}"
+    retrieval_query = retrieval_query[-1000:]
+
+    # Retrieve no more than four WT Rules passages.
+    rules = retrieve_rules(retrieval_query, k=4)
 
     if not rules:
         return {
-            "answer": "I couldn't find relevant information in the WT Rules document.",
-            "sources": []
+            "answer": (
+                "I couldn't find relevant information in the "
+                "WT Competition Rules document. Please rephrase "
+                "your question or provide more context."
+            ),
+            "sources": [],
         }
 
-    context_parts, sources = [], []
+    context_parts = []
+    sources = []
+
     for rule in rules:
         page = rule.get("page")
-        content = rule.get("content", "")[:1800]
-        context_parts.append(
-            f"Source: {rule.get('source')}\\nPDF Page: {page}\\nRule Content:\\n{content}"
-        )
-        sources.append({"source": rule.get("source"), "page": page})
+        content = rule.get("content", "")[:1200]
 
-    context = "\\n\\n".join(context_parts)
+        context_parts.append(
+            f"PDF Page: {page}\n"
+            f"Rule Content:\n{content}"
+        )
+
+        sources.append({
+            "source": rule.get("source"),
+            "page": page,
+        })
+
+    context = "\n\n".join(context_parts)
+
+    # Keep supplementary terminology small and secondary.
+    try:
+        terminology_context = (
+            format_terminology_context(question, k=1) or ""
+        )
+        terminology_context = str(terminology_context)[:600]
+    except Exception:
+        terminology_context = ""
+
     prompt = f"""
 You are the World Taekwondo Rules Assistant.
 
-Answer official rules questions using ONLY the retrieved WT Competition Rules
-and Interpretation passages below.
+Answer using ONLY the retrieved WT Competition Rules passages
+for official rules, penalties, scoring and referee decisions.
 
-Rules:
-1. Never guess or invent rules, penalties, article numbers or referee decisions.
-2. Use article numbers and PDF pages internally only; never display them.
-3. Do not expose document names, filenames, page numbers or citations.
-4. If retrieved passages are insufficient, say so clearly. Never guess.
-5. Preserve the actual meaning of the official rules.
-6. Conversation history is only for understanding follow-up references. It is
-   NOT an official rules source.
-7. Keep the answer clear and professional.
+IMPORTANT RULES:
+1. Never invent rules, penalties or article numbers.
+2. Do not display PDF filenames or page numbers.
+3. If the retrieved passages are insufficient, say so clearly.
+4. Preserve the actual meaning of the official rules.
+5. Use conversation history only to understand follow-up questions.
+6. Terminology is supplementary and is not an official rules source.
+7. Give a clear, concise and professional answer.
+8. Prefer bullet points when explaining multiple scenarios.
 
 Experience level: {user_level}
 
@@ -68,19 +112,26 @@ Retrieved WT rules:
 Supplementary terminology:
 {terminology_context}
 
-Terminology is not an official source for WT regulations, scoring, penalties
-or referee decisions.
-
 Current user question:
 {question}
 
-Resolve references such as "what about then?" using the conversation, but
-verify every official rules claim using only the retrieved WT passages.
+Resolve references using conversation history, but verify every
+official rules claim using only the retrieved WT rules.
 """
+
     response = get_llm().invoke(prompt)
-    return {"answer": response.content, "sources": sources}
+
+    return {
+        "answer": response.content,
+        "sources": sources,
+    }
 
 
 if __name__ == "__main__":
-    q = "What happens if a contestant intentionally attacks a fallen opponent?"
-    print(answer_rules_question(q)["answer"])
+    question = (
+        "What happens if a contestant intentionally "
+        "attacks a fallen opponent?"
+    )
+
+    result = answer_rules_question(question)
+    print(result["answer"])

@@ -15,55 +15,60 @@ load_dotenv(ROOT_DIR / ".env")
 
 @lru_cache(maxsize=1)
 def get_vector_store():
-    """
-    Reuse one WT Rules Pinecone vector store
-    instead of creating a new instance per request.
-    """
+    """Reuse the WT Rules Pinecone vector store."""
+
     index_name = os.getenv("PINECONE_INDEX_NAME")
 
     if not index_name:
-        raise ValueError("PINECONE_INDEX_NAME missing from .env")
+        raise ValueError("PINECONE_INDEX_NAME missing from environment")
 
     return PineconeVectorStore(
         index_name=index_name,
         embedding=get_embeddings(),
-        namespace="wt-rules-2026"
+        namespace="wt-rules-2026",
     )
 
 
-def retrieve_rules(question: str, k: int = 3):
+def retrieve_rules(question: str, k: int = 4):
+    """
+    Retrieve a small number of relevant WT Rules passages.
+    Keeps the LLM prompt compact.
+    """
+
+    if not question or not question.strip():
+        return []
+
     vector_store = get_vector_store()
 
-    search_queries = [
-        question,
-        "Article 14.2 prohibited acts shall be penalized with Gam-jeom",
-        "Article 14.3 Gam-jeom counted as one point for opposing contestant",
-        "Article 14.4.1.10 attacking the fallen opponent"
-    ]
+    results = vector_store.similarity_search_with_score(
+        question.strip()[:1000],
+        k=min(k, 4),
+    )
 
-    unique_results = {}
+    unique_results = []
+    seen = set()
 
-    for query in search_queries:
-        results = vector_store.similarity_search_with_score(
-            query,
-            k=k
+    for document, score in results:
+        content = document.page_content.strip()
+
+        key = (
+            document.metadata.get("page"),
+            content,
         )
 
-        for document, score in results:
-            key = (
-                document.metadata.get("page"),
-                document.page_content.strip()
-            )
+        if key in seen:
+            continue
 
-            if key not in unique_results:
-                unique_results[key] = {
-                    "content": document.page_content,
-                    "page": document.metadata.get("page"),
-                    "source": document.metadata.get("source"),
-                    "score": float(score)
-                }
+        seen.add(key)
 
-    return list(unique_results.values())
+        unique_results.append({
+            "content": content[:1200],
+            "page": document.metadata.get("page"),
+            "source": document.metadata.get("source"),
+            "score": float(score),
+        })
+
+    return unique_results
 
 
 if __name__ == "__main__":
@@ -71,8 +76,10 @@ if __name__ == "__main__":
 
     results = retrieve_rules(question)
 
+    print("Retrieved passages:", len(results))
+
     for index, result in enumerate(results, start=1):
         print(f"\n--- Result {index} ---")
-        print(f"Page: {result['page']}")
-        print(f"Score: {result['score']:.4f}")
+        print("Page:", result["page"])
+        print("Score:", result["score"])
         print(result["content"])

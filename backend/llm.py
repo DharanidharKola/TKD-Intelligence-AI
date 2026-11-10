@@ -15,6 +15,6 @@ def get_llm():
     return ChatGroq(
         model="openai/gpt-oss-120b",
         temperature=0.3,
-        max_tokens=3072,
+        max_tokens=1200,
         api_key=api_key
     )
