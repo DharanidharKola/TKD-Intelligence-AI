@@ -3,6 +3,7 @@ from backend.llm import get_llm
 from backend.rag.retriever import retrieve_rules
 from backend.rag.terminology_retriever import format_terminology_context
 import re
+from backend.response_cleaner import clean_ai_response
 
 def clean_ai_response(text: str) -> str:
     """Remove internal PDF references and citation markers."""

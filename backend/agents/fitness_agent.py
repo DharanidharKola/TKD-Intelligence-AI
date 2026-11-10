@@ -1,5 +1,6 @@
 from backend.llm import get_llm
 from backend.rag.terminology_retriever import format_terminology_context
+from backend.response_cleaner import clean_ai_response
 
 
 def format_chat_history(chat_history):
@@ -57,7 +58,13 @@ do not invent unsupported definitions, and do not expose internal PDF names,
 page numbers or citations.
 """
     response = llm.invoke(prompt)
-    return {"answer": response.content, "sources": []}
+
+    clean_answer = clean_ai_response(response.content)
+
+    return {
+        "answer": clean_answer,
+        "sources": []
+    }
 
 
 if __name__ == "__main__":
