@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 from backend.rag.embeddings import get_embeddings
@@ -19,7 +20,11 @@ def get_vector_store():
     if not index_name:
         raise ValueError("PINECONE_INDEX_NAME missing from .env")
 
-    embeddings = get_embeddings()
+    embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"normalize_embeddings": True}
+    )
 
     vector_store = PineconeVectorStore(
         index_name=index_name,
