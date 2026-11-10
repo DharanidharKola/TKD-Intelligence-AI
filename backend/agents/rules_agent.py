@@ -2,6 +2,28 @@
 from backend.llm import get_llm
 from backend.rag.retriever import retrieve_rules
 from backend.rag.terminology_retriever import format_terminology_context
+import re
+
+def clean_ai_response(text: str) -> str:
+    """Remove internal PDF references and citation markers."""
+
+    patterns = [
+        r"\[\s*PDF\s*[\d.]+\s*\]",
+        r"\[\s*PDF\s*Page\s*[\d.]+\s*\]",
+        r"\[\s*Page\s*[\d.]+\s*\]",
+        r"\[\s*p\.?\s*\d+[\d.]*\s*\]",
+        r"【\s*PDF\s*[\d.]+\s*】",
+        r"\(\s*PDF\s*[\d.]+\s*\)",
+    ]
+
+    for pattern in patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+    # Clean up excessive spaces and blank lines.
+    text = re.sub(r" {2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 
 
 def format_chat_history(chat_history):
@@ -100,6 +122,8 @@ IMPORTANT RULES:
 6. Terminology is supplementary and is not an official rules source.
 7. Give a clear, concise and professional answer.
 8. Prefer bullet points when explaining multiple scenarios.
+9. Never display PDF references, page numbers, filenames, source identifiers, citation markers or internal document references.
+10. Present answers directly without showing where individual retrieved passages came from.
 
 Experience level: {user_level}
 
@@ -121,9 +145,11 @@ official rules claim using only the retrieved WT rules.
 
     response = get_llm().invoke(prompt)
 
+    clean_answer = clean_ai_response(response.content)
+
     return {
-        "answer": response.content,
-        "sources": sources,
+        "answer": clean_answer,
+        "sources": [],
     }
 
 
