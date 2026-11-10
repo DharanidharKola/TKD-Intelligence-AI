@@ -7,8 +7,8 @@ langchain
 langchain-groq
 langchain-pinecone
 pinecone
-langchain-huggingface
-sentence-transformers
+langchain-community
+fastembed
 pypdf
 python-multipart
 langchain-text-splitters
